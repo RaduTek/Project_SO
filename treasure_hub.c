@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <string.h>
@@ -175,6 +176,16 @@ int parse_interactive_command() {
     while (true) {
         printf("> ");
         if (fgets(buf, sizeof(buf), stdin) == NULL) {
+            if (feof(stdin)) {
+                break;
+            }
+            
+            if (ferror(stdin) && errno == EINTR) {
+                // Interrupted by signal, retry
+                clearerr(stdin);
+                continue;
+            }
+
             printf("error: read input\n");
             continue;
         }
