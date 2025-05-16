@@ -2,10 +2,13 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <unistd.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+
+#include "monitor.c"
 
 #define MAX_PATH 256
 #define MAX_ARGC 32
@@ -15,13 +18,20 @@
 bool monitor_started = false;
 bool monitor_stopping = false;
 pid_t monitor_pid = 0;
+int monitor_pipefd[2];
 
 
 void handle_sigchld(int signum) {
-    wait(NULL);
-    monitor_started = false;
-    monitor_stopping = false;
-    printf("Monitor has exited\n");
+    int status;
+    pid_t pid;
+
+    while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+        if (pid == monitor_pid) {
+            monitor_started = false;
+            monitor_stopping = false;
+            printf("Monitor has exited\n");
+        }
+    }
 }
 
 void setup_signal() {
@@ -30,6 +40,42 @@ void setup_signal() {
     sa.sa_flags = 0;
     sigemptyset(&sa.sa_mask);
     sigaction(SIGCHLD, &sa, NULL);
+}
+
+
+void read_monitor_output() {
+    char buf[256];
+
+    struct pollfd fds;
+    fds.fd = monitor_pipefd[0];
+    fds.events = POLLIN;
+
+    // read from the pipe until done or it times out
+    while (true) {
+        int ret = poll(&fds, 1, 500);
+        if (ret < 0) {
+            perror("error: poll");
+            break;
+        } else if (ret == 0) {
+            break;
+        }
+
+        if (fds.revents & POLLIN) {
+            int n = read(monitor_pipefd[0], buf, sizeof(buf) - 1);
+            if (n > 0) {
+                buf[n] = '\0';
+                printf("%s", buf);
+            } else if (n == 0) {
+                break;
+            } else {
+                perror("read");
+                break;
+            }
+        } else if (fds.revents & (POLLERR | POLLHUP)) {
+            // Error or hang-up
+            break;
+        }
+    }
 }
 
 void send_command(char *command) {
@@ -55,17 +101,35 @@ void send_command(char *command) {
     if (kill(monitor_pid, SIGUSR1) < 0) {
         perror("error: kill");
     }
+
+    // read command output from monitor
+    read_monitor_output();
 }
 
 
 int cmd_start_monitor(int argc, char *argv[]) {
     if (!monitor_started) {
+        // create pipe for the monitor
+        if (pipe(monitor_pipefd) < 0) {
+            perror("error: pipe");
+            return 1;
+        }
+
         // start the monitor
         monitor_pid = fork();
         if (monitor_pid == 0) {
-            execl("./monitor", "monitor", NULL);
-            exit(1);
+            // child process
+            // redirect stdout and stderr to the pipe
+            close(monitor_pipefd[0]);
+            dup2(monitor_pipefd[1], STDOUT_FILENO);
+            dup2(monitor_pipefd[1], STDERR_FILENO);
+            close(monitor_pipefd[1]);
+
+            // run the monitor's main function
+            exit(monitor_main());
         }
+
+        close(monitor_pipefd[1]);
 
         monitor_started = true;
         monitor_stopping = false;
@@ -113,11 +177,6 @@ int cmd_view_treasure(int argc, char *argv[]) {
         printf("Monitor is not started!\n");
         return 1;
     }
-
-    // printf("I got %d arguments:\n", argc);
-    // for (int i=0; i < argc; i++) {
-    //     printf("argv[%d]: %s\n", i, argv[i]);
-    // }
 
     if (argc < 3) {
         printf("Bad arguments!\n");

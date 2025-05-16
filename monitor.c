@@ -50,7 +50,7 @@ void got_signal(int signum) {
     }
 }
 
-int main() {
+int monitor_main() {
     // Set up the signal handler
     struct sigaction sa;
     sa.sa_flags = 0;
