@@ -158,7 +158,7 @@ int list_treasures(const char *hunt_id) {
 
 int view_treasure(const char *hunt_id, int target_id) {
     char file_path[MAX_PATH];
-    snprintf(file_path, MAX_PATH, "hunts/%s/treasures.dat", hunt_id);
+    snprintf(file_path, MAX_PATH, "hunts/%s/treasures", hunt_id);
 
     int fd = open(file_path, O_RDONLY);
     if (fd < 0) {
