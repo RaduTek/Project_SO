@@ -9,6 +9,7 @@
 #include <sys/wait.h>
 
 #include "monitor.c"
+#include "hunt_scores.c"
 
 #define MAX_PATH 256
 #define MAX_ARGC 32
@@ -190,6 +191,13 @@ int cmd_view_treasure(int argc, char *argv[]) {
     return 0;
 }
 
+int cmd_calculate_score(int argc, char *argv[]) {
+
+    calc_hunt_scores();
+
+    return 0;
+}
+
 int cmd_stop_monitor(int argc, char *argv[]) {
     if (monitor_started) {
         // stop the monitor
@@ -209,6 +217,7 @@ int cmd_help(int argc, char *argv[]) {
     printf("  list_hunts: List all hunts\n");
     printf("  list_treasures: List all treasures\n");
     printf("  view_treasure: View a specific treasure\n");
+    printf("  calculate_score: Calculate the score for each hunt\n");
     printf("  stop_monitor: Stop the monitor process\n");
     printf("  help: Show this help message\n");
     printf("  exit: Exit the program\n");
@@ -272,6 +281,8 @@ int parse_interactive_command() {
             cmd_list_treasures(argc, argv);
         } else if (strcmp(argv[0], "view_treasure") == 0) {
             cmd_view_treasure(argc, argv);
+        } else if (strcmp(argv[0], "calculate_score") == 0) {
+            cmd_calculate_score(argc, argv);
         } else if (strcmp(argv[0], "stop_monitor") == 0) {
             cmd_stop_monitor(argc, argv);
         } else if (strcmp(argv[0], "help") == 0) {
